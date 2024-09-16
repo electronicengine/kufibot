@@ -83,7 +83,7 @@ class ServoDriver():
   def head_down(self):
     
       current_angle = self.joint_angles["neck_up"]
-      target_angle = current_angle + 10  # Increase angle up to 90 degrees
+      target_angle = current_angle + 1  # Increase angle up to 90 degrees
       if target_angle >= 180 :
         target_angle = 180
 
@@ -91,7 +91,7 @@ class ServoDriver():
       self.joint_angles["neck_up"] = target_angle
       
       current_angle = self.joint_angles["neck_down"]
-      target_angle = current_angle - 10  # Increase angle up to 90 degrees
+      target_angle = current_angle - 1  # Increase angle up to 90 degrees
       if target_angle <= 0 :
         target_angle = 0  
       
@@ -101,7 +101,7 @@ class ServoDriver():
 
   def head_up(self):
       current_angle = self.joint_angles["neck_up"]
-      target_angle = current_angle - 10  # Increase angle up to 90 degrees
+      target_angle = current_angle - 1  # Increase angle up to 90 degrees
       if target_angle <= 20 :
         target_angle = 20
         
@@ -109,7 +109,7 @@ class ServoDriver():
       self.joint_angles["neck_up"] = target_angle
       
       current_angle = self.joint_angles["neck_down"]
-      target_angle = current_angle + 10  # Increase angle up to 90 degrees
+      target_angle = current_angle + 1  # Increase angle up to 90 degrees
       if target_angle >= 180 :
         target_angle = 180
       
@@ -120,7 +120,7 @@ class ServoDriver():
 
   def head_left(self):
       current_angle = self.joint_angles["neck_right"]
-      target_angle = current_angle + 10  # Increase angle up to 90 degrees
+      target_angle = current_angle + 1  # Increase angle up to 90 degrees
       if target_angle >= 180 :
         target_angle = 180
         
@@ -130,7 +130,7 @@ class ServoDriver():
 
   def head_right(self):
       current_angle = self.joint_angles["neck_right"]
-      target_angle = current_angle - 10  # Increase angle up to 90 degrees
+      target_angle = current_angle - 1  # Increase angle up to 90 degrees
       if target_angle <= 0 :
         target_angle = 0
         

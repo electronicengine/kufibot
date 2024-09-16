@@ -3,7 +3,7 @@ import pyaudio
 import json
 
 from motor_driver import MotorDriver
-from motor_controller import MotorController
+from motor_driver import MotorDriver
 from servo_driver import ServoDriver
 import tkinter as tk
 from tkinter import ttk

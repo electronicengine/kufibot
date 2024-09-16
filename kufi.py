@@ -3,9 +3,8 @@ from speech_processor import SpeechProcessor
 import pyaudio
 import json
 from vosk import Model, KaldiRecognizer
-
+from remote_controller import RemoteController
 from motor_driver import MotorDriver
-from motor_controller import MotorController
 from servo_driver import ServoDriver
 import tkinter as tk
 from tkinter import ttk
@@ -15,11 +14,9 @@ from object_tracking_color import ColorTracker
 import cv2
 import numpy as np
 import time
+import asyncio
 
-def update_servo_angle(event, channel, joint, label):
-    angle = angle_sliders[channel].get()
-    servo.set_absolute_servo_angle(joint, angle)
-    label.config(text=f"{joint}: {angle}°")
+
     
     
 # Function to check condition after a delay
@@ -113,45 +110,6 @@ def listen_loop(recognizer, processor, motor):
     finally:
         recognizer.close()
 
-def setup_ui(root, motor, servo):
-    # Frame for movement controls
-    button_frame = tk.Frame(root)
-    button_frame.pack(side="top", anchor="nw", pady=10)
-
-    # Movement buttons
-    btn_forward = tk.Button(button_frame, text="Forward", command=motor.forward)
-    btn_forward.grid(row=0, column=1, padx=5, pady=5)
-
-    btn_backward = tk.Button(button_frame, text="Backward", command=motor.backward)
-    btn_backward.grid(row=2, column=1, padx=5, pady=5)
-
-    btn_right = tk.Button(button_frame, text="Right", command=motor.turnRight)
-    btn_right.grid(row=1, column=2, padx=5, pady=5)
-
-    btn_left = tk.Button(button_frame, text="Left", command=motor.turnLeft)
-    btn_left.grid(row=1, column=0, padx=5, pady=5)
-
-    btn_stop = tk.Button(root, text="Stop", command=motor.stop)
-    btn_stop.pack(side="top", pady=10)
-
-    # Frame for head controls
-    head_control_frame = tk.Frame(root)
-    head_control_frame.pack(side="top", anchor="nw", pady=10)
-
-    # Head control buttons
-    head_up = tk.Button(head_control_frame, text="Head Up", command=servo.head_up)
-    head_up.grid(row=0, column=1, padx=5, pady=5)
-
-    head_down = tk.Button(head_control_frame, text="Head Down", command=servo.head_down)
-    head_down.grid(row=2, column=1, padx=5, pady=5)
-
-    head_right = tk.Button(head_control_frame, text="Head Right", command=servo.head_right)
-    head_right.grid(row=1, column=2, padx=5, pady=5)
-
-    head_left = tk.Button(head_control_frame, text="Head Left", command=servo.head_left)
-    head_left.grid(row=1, column=0, padx=5, pady=5)
-
-
 
 if __name__ == "__main__":
     
@@ -161,45 +119,19 @@ if __name__ == "__main__":
     tracker = ColorTracker()  
     com = False
 
-    # Initialize the main window
-    root = tk.Tk()
-    root.title("6-Servo Motor Control")
-
-    angle_sliders = []
-    angle_labels = []
-
-    setup_ui(root, motor, servo)
-
-    servo_angles = servo.get_all_joint_angles()
-    servo_channels = servo.get_joint_channels()
-
-    for joint, angle in servo_angles.items():
-        
-        label = ttk.Label(root, text=f"{joint}: {angle}°", font=("Helvetica", 12))
-        label.pack(pady=5)
-        angle_labels.append(label)
-        
-        slider = ttk.Scale(root, from_=0, to=180, orient="horizontal", length=400)
-        slider.set(angle)  # Set the default angle
-        slider.pack(pady=10)
-        angle_sliders.append(slider)
-
-        slider.bind("<Motion>", lambda event, channel=servo_channels[joint], joint=joint, label=label: update_servo_angle(event, channel, joint, label))
-
     
     recognizer = SpeechRecognizer("ai.models/trRecognizeModel")
     processor = SpeechProcessor("ai.models/trSpeechModel/dfki.onnx")
     tracker = ColorTracker()
-    
+    remote_controller = RemoteController(motor, servo)
+
     listen_thread = threading.Thread(target=listen_loop, args=(recognizer,processor, motor,))
     listen_thread.start()
     
     # track_thread = threading.Thread(target=tracker.start)
     # track_thread.start()
 
-    
-    # Start the GUI loop
-    root.mainloop()
+    asyncio.run(remote_controller.main())
 
     # Optionally, you can wait for the thread to finish if needed
     listen_thread.join()

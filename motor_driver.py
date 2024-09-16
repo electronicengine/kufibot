@@ -35,21 +35,21 @@ class MotorDriver:
             self.pwm.setLevel(pin1, 1)
             self.pwm.setLevel(pin2, 0)
             
-    def forward(self):
-        self.run(self.motor["right"], 'forward', 100)
-        self.run(self.motor["left"], 'forward', 100)
+    def forward(self, magnitude):
+        self.run(self.motor["right"], 'forward', magnitude)
+        self.run(self.motor["left"], 'forward', magnitude)
 
-    def backward(self):
-        self.run(self.motor["right"], 'backward', 100)
-        self.run(self.motor["left"], 'backward', 100)
+    def backward(self, magnitude):
+        self.run(self.motor["right"], 'backward', magnitude)
+        self.run(self.motor["left"], 'backward', magnitude)
         
-    def turnRight(self):
-        self.run(self.motor["right"], 'forward', 100)
-        self.run(self.motor["left"], 'backward', 100)
+    def turnRight(self, magnitude):
+        self.run(self.motor["right"], 'forward', magnitude)
+        self.run(self.motor["left"], 'backward', magnitude)
 
-    def turnLeft(self):
-        self.run(self.motor["right"], 'backward', 100)
-        self.run(self.motor["left"], 'forward', 100)
+    def turnLeft(self, magnitude):
+        self.run(self.motor["right"], 'backward', magnitude)
+        self.run(self.motor["left"], 'forward', magnitude)
         
     def stop(self):
         self.pwm.setDutycycle(self.PWMA, 0)
