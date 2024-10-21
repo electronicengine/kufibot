@@ -11,6 +11,11 @@ from tkinter import ttk
 import threading
 from gesture_control import GestureControl
 from object_tracking_color import ColorTracker
+from compass_driver import CompassDriver
+from distance_driver import DistanceDriver
+from power_driver import PowerDriver
+
+
 import cv2
 import numpy as np
 import time
@@ -40,7 +45,7 @@ def listen_loop(recognizer, processor, motor):
             if result_text != None:  # Completed Message
                 print(f"Completed: {result_text}")
                 recognizer.stop_listen()
-                
+                                
                 if "çekiyorum" in result_text.lower():
                     gesture.doit("salute", 3)
                     processor.speak_text("herkese selam")
@@ -103,7 +108,7 @@ def listen_loop(recognizer, processor, motor):
                 if 'text' in result:
                     print(f"Partial: {result['text']}")
                 else : 
-                    print("recognized none")
+                    pass
                 
     except KeyboardInterrupt:
         print("Stopping the stream...")
@@ -117,13 +122,19 @@ if __name__ == "__main__":
     servo = ServoDriver ()
     gesture = GestureControl()
     tracker = ColorTracker()  
+    compass = CompassDriver()
+    distance = DistanceDriver()
+    power = PowerDriver()
+    
     com = False
 
     
     recognizer = SpeechRecognizer("ai.models/trRecognizeModel")
     processor = SpeechProcessor("ai.models/trSpeechModel/dfki.onnx")
+    processor.start_stream()
+    
     tracker = ColorTracker()
-    remote_controller = RemoteController(motor, servo)
+    remote_controller = RemoteController(motor, servo, compass, distance, power)
 
     listen_thread = threading.Thread(target=listen_loop, args=(recognizer,processor, motor,))
     listen_thread.start()

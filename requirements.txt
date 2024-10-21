@@ -1,0 +1,8 @@
+numpy==2.1.2
+opencv_python==4.10.0.84
+piper_tts==1.2.0
+PyAudio==0.2.14
+smbus==1.1.post2
+sounddevice==0.5.1
+vosk==0.3.45
+websockets==13.1

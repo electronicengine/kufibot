@@ -1,16 +1,34 @@
 import subprocess
 import re
 import json
+import sounddevice as sd
+from piper.voice import PiperVoice
+import numpy as np
+
 
 class SpeechProcessor:
     
     def __init__(self, model):
         self.model = model
-    
+        self.config = model + ".json"
+        self.voice = PiperVoice.load(self.model, self.config)
+        
+        self.stream = sd.OutputStream(samplerate=self.voice.config.sample_rate, channels=1, dtype='int16')
+        
+        
+    def start_stream(self):
+        self.stream.start()
+
+        
+    def stop_stream(self):
+        self.stream.stop()
+        self.stream.close()
+
+        
     def execute_curl(self, prompt):
         command = [
             "curl", "-X", "POST", "http://192.168.1.20:11434/api/generate",
-            "-d", json.dumps({"model": "kufi", "prompt": prompt, "options":{"num_predict":50}})
+            "-d", json.dumps({"model": "kufi", "prompt": prompt, "options":{"num_predict":120}})
         ]
         result = subprocess.run(command, capture_output=True, text=True)
         return result.stdout
@@ -25,21 +43,12 @@ class SpeechProcessor:
         return re.sub(pattern, ' ', text)
 
     def speak_text(self, text):
+        
+        for audio_bytes in self.voice.synthesize_stream_raw(text):
+            int_data = np.frombuffer(audio_bytes, dtype=np.int16)
+            self.stream.write(int_data)
                 
-        try:
-            subprocess.run(['sounds/testSound.sh'], capture_output=True, text=True)
-            echo_process = subprocess.Popen(['echo', text], stdout=subprocess.PIPE)
-            piper_process = subprocess.Popen(
-                ['../piper/piper', '--model', self.model, '--output-raw'],
-                stdin=echo_process.stdout, stdout=subprocess.PIPE)
-            echo_process.stdout.close()
-            aplay_process = subprocess.Popen(
-                ['aplay', '-r', '22050', '-f', 'S16_LE', '-t', 'raw', '-'],
-                stdin=piper_process.stdout)
-            piper_process.stdout.close()
-            aplay_process.wait()
-        except Exception as e:
-            print(f"Error during speech synthesis: {e}")
+
 
     def translate(self, text, source_language, target_language):
         command = ['trans', '-b', f'{source_language}:{target_language}', text]

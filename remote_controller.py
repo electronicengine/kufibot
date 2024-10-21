@@ -7,15 +7,30 @@ import math
 import logging
 from motor_driver import MotorDriver
 from servo_driver import ServoDriver
+from compass_driver import CompassDriver
+from distance_driver import DistanceDriver
+from power_driver import PowerDriver
+import threading
 import time
 
 class RemoteController:
-    def __init__(self, motor_driver, servo_driver):
+    def __init__(self, motor_driver, servo_driver, compass_driver, distance_driver, power_driver):
         self.cap = cv2.VideoCapture(0)
         self.servo_driver = servo_driver
         self.motor_driver = motor_driver
+        self.compass_driver  = compass_driver
+        self.distance_driver = distance_driver
+        self.power_driver = power_driver
+        self.current_thread = None  # To track the running thread
+        self.motor_controling = False
 
-    async def video_stream(self, websocket, path):
+        self.joint_angles = {}
+        self.compass = {}
+        self.distance  = {}
+        self.power = {}
+        
+
+    async def remote_stream(self, websocket, path):
         while self.cap.isOpened():
             ret, frame = self.cap.read()
             if not ret:
@@ -23,99 +38,146 @@ class RemoteController:
 
             _, buffer = cv2.imencode('.jpg', frame)
             await websocket.send(buffer.tobytes())
-            await asyncio.sleep(0.04)
 
-
+            metadata = {
+                "joint_angles": self.joint_angles,
+                "compass": self.compass,
+                "distance": self.distance,
+                "power": self.power 
+            }
+            metadata_json = json.dumps(metadata)
+            await websocket.send(metadata_json)  # Send metadata as text
+            
+            try:
+                message = await asyncio.wait_for(websocket.recv(), timeout=0.04)  
+                self.handle_robot_control(message)  
+            except asyncio.TimeoutError:
+                print("Remote Controller Stream Timeout!")
+                pass 
+            
         self.cap.release()
 
-    async def controller_handler(self, websocket, path):
-        async for message in websocket:
+    def run_in_thread(self, target, *args):
 
-            if message == "Get Info":
-                joint_angles = self.servo_driver.get_all_joint_angles()
-                joint_angles_json = json.dumps(joint_angles)
-                print(f"sending: {joint_angles_json}")
-                await websocket.send(joint_angles_json)
-            else:
-                self.handle_robot_control(message)
+        if self.current_thread and self.current_thread.is_alive():
+            return  
+        
+        self.current_thread = threading.Thread(target=target, args=args)
+        self.current_thread.start()
 
-    def control_body(self, angle, magnitude):
+    def control_body(self, angle, magnitude):        
         if magnitude == 0 and angle == 0:
-            self.motor_driver.stop()
+            print("stop")
+            self.run_in_thread(self.motor_driver.stop)
         elif 45 <= angle < 135:
             print("forward")
-            self.motor_driver.forward(magnitude)
+            self.run_in_thread(self.motor_driver.forward, magnitude)
         elif -45 <= angle < 45:
             print("turnRight")
-            self.motor_driver.turnRight(magnitude)
+            self.run_in_thread(self.motor_driver.turnRight, magnitude)
         elif -135 <= angle < -45:
-            print("turnRight")
-            self.motor_driver.backward(magnitude)
+            print("backward")
+            self.run_in_thread(self.motor_driver.backward, magnitude)
         elif angle >= 135 or angle < -135:
-            self.motor_driver.turnLeft(magnitude)
+            print("turnLeft")
+            self.run_in_thread(self.motor_driver.turnLeft, magnitude)
         else:
-            self.motor_driver.stop()
-
+            print("stop")
+            self.run_in_thread(self.motor_driver.stop)
+        
     def control_head(self, angle, magnitude):
         if magnitude == 0 and angle == 0:
-            pass
+            return
         elif 45 <= angle < 135:
-            self.servo_driver.head_up()
+            self.run_in_thread(self.servo_driver.head_up)
         elif -45 <= angle < 45:
-            self.servo_driver.head_right()
+            self.run_in_thread(self.servo_driver.head_right)
         elif -135 <= angle < -45:
-            self.servo_driver.head_down()
+            self.run_in_thread(self.servo_driver.head_down)
         elif angle >= 135 or angle < -135:
-            self.servo_driver.head_left()
+            self.run_in_thread(self.servo_driver.head_left)
+        else:
+            return 
 
     def control_arm(self,control_id, angle):
         mapped_angle = (angle / 100) * 180
         if control_id == "left_arm":
-            self.servo_driver.set_absolute_servo_angle("left_arm", mapped_angle)
+            print("left_arm: ", angle)
+            self.run_in_thread(self.servo_driver.set_absolute_servo_angle, "left_arm", mapped_angle)
         elif control_id == "right_arm" :
-            self.servo_driver.set_absolute_servo_angle("right_arm", mapped_angle)
+            print("right_arm: ", angle)
+            self.run_in_thread(self.servo_driver.set_absolute_servo_angle, "right_arm", mapped_angle)
         else :
             pass
 
-    def control_eye(self, control_id, angle):
-        
-        if control_id == "left_eye":
-            self.servo_driver.set_absolute_servo_angle("left_eye", angle)
-        elif control_id == "right_eye" :
-            self.servo_driver.set_absolute_servo_angle("right_eye", angle)
+    def control_eye(self, angle):
+        if angle == 180:
+            print("eye_up")
+            self.run_in_thread(self.servo_driver.eye_up)
+        elif angle == 0 :
+            print("eye_down")
+            self.run_in_thread(self.servo_driver.eye_down)
         else :
             pass
 
     def handle_robot_control(self, input_message):
         try:
             data = json.loads(input_message)
-            control_id = data.get("Id")
-            angle = data.get("Angle")
-            strength = data.get("Strength")
-            print(control_id)
+            if data:
+                object_name = list(data.keys())[0]
+                control_id = object_name
+                
+                if control_id != None:
+                    self.motor_controling = True
 
-            if control_id == "body_joystick":
-                self.control_body(angle, strength)
-            elif control_id == "head_joystick":
-                self.control_head(angle, strength)
-            elif control_id in ["right_arm", "left_arm"]:
-                self.control_arm(control_id, angle)
-            elif control_id in ["right_eye", "left_eye"]:
-                self.control_eye(angle)
+                if control_id == "body_joystick":
+                    angle = data[object_name]["Angle"]
+                    strength = data[object_name]["Strength"]
+                    self.control_body(angle, strength)
+                elif control_id == "head_joystick":
+                    angle = data[object_name]["Angle"]
+                    strength = data[object_name]["Strength"]
+                    self.control_head(angle, strength)
+                elif control_id in ["right_arm", "left_arm"]:
+                    angle = data[object_name]["Angle"]
+                    self.control_arm(control_id, angle)
+                elif control_id in ["right_eye", "left_eye"]:
+                    angle = data[object_name]["Angle"]
+                    self.control_eye(angle)
+                else : 
+                    self.motor_controling = False
+                    
+            else:
+                self.motor_controling = False
+
         except json.JSONDecodeError as e:
             print(f"Error decoding JSON: {e}")
         except KeyError as e:
             print(f"Missing key in JSON data: {e}")
 
-    async def main(self):
-        ip = "192.168.1.39"
-        controller_port = 8766
-        video_stream_port = 8765
-        
-        controller_server = await websockets.serve(self.controller_handler, ip, controller_port)
-        video_server = await websockets.serve(self.video_stream, ip, video_stream_port)
+    async def timer_loop(self):
 
-        await asyncio.gather(
-            controller_server.wait_closed(),
-            video_server.wait_closed()
-        )
+        while True:
+            
+            if self.motor_controling == False:
+                self.compass = await asyncio.to_thread(self.compass_driver.get_all)
+                self.distance = await asyncio.to_thread(self.distance_driver.get_distance)
+                self.power = await asyncio.to_thread(self.power_driver.get_consumption)
+                self.joint_angles = self.servo_driver.get_all_joint_angles()
+                
+            await asyncio.sleep(0.5)  # Wait for 1 second
+            
+    async def main(self):
+        ip = "192.168.1.44"
+        # controller_port = 8766
+        remote_server_port = 8765
+        
+        print(f"Starting WebSocket server at {ip}:{remote_server_port}...")
+        remote_server = await websockets.serve(self.remote_stream, ip, remote_server_port)
+
+        asyncio.create_task(self.timer_loop())
+        
+        await remote_server.wait_closed()
+
+        
+
